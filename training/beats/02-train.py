@@ -30,7 +30,7 @@ def process_arguments(args):
                         help='Maximum number of samples to draw per streamer')
 
     parser.add_argument('--patch-duration', dest='duration', type=float,
-                        default=16.0,
+                        default=8.0,
                         help='Duration (in seconds) of training patches')
 
     parser.add_argument('--seed', dest='seed', type=int,
