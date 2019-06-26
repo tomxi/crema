@@ -157,7 +157,7 @@ def construct_model(pump):
                                    padding='valid', activation='relu',
                                    data_format='channels_last')(conv1)
 
-    squeeze_c = crema.layers.SqueezeLayer(axis=-1)(x_bin)
+    squeeze_c = crema.layers.SqueezeLayer(axis=-1)(x_bn)
     squeeze = crema.layers.SqueezeLayer(axis=2)(conv2)
 
     rnn_in = K.layers.concatenate([squeeze, squeeze_c])
