@@ -105,7 +105,7 @@ def data_generator(working, tracks, sampler, k, augment=True, rate=8, **kwargs):
 
     for track in tracks:
         fname = os.path.join(working,
-                             os.path.extsep.join([track, 'h5']))
+                             os.path.extsep.join([str(track), 'h5']))
         seeds.append(pescador.Streamer(data_sampler, fname, sampler))
 
         if augment:
@@ -122,7 +122,7 @@ def val_generator(working, tracks, sampler, augment=True):
     seeds = []
     for track in tracks:
         fname = os.path.join(working,
-                             os.path.extsep.join([track, 'h5']))
+                             os.path.extsep.join([str(track), 'h5']))
         seeds.append(pescador.Streamer(data_sampler, fname, sampler))
 
         if augment:
