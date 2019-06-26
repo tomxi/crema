@@ -84,7 +84,7 @@ def val_sampler(max_duration, pump, seed):
     '''validation sampler'''
     n_frames = librosa.time_to_frames(max_duration,
                                       sr=pump['mel'].sr,
-                                      hop_length=pump['mel'].hop_length)[0]
+                                      hop_length=pump['mel'].hop_length)
 
     return pumpp.sampler.VariableLengthSampler(None, 32, n_frames,
                                                *pump.ops,
