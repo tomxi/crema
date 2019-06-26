@@ -75,7 +75,7 @@ def make_sampler(max_samples, duration, pump, seed):
 
     n_frames = librosa.time_to_frames(duration,
                                       sr=pump['mel'].sr,
-                                      hop_length=pump['mel'].hop_length)[0]
+                                      hop_length=pump['mel'].hop_length)
 
     return pump.sampler(max_samples, n_frames, random_state=seed)
 
