@@ -42,7 +42,7 @@ def process_arguments(args):
                         help='Number of active training streamers')
 
     parser.add_argument('--batch-size', dest='batch_size', type=int,
-                        default=32,
+                        default=16,
                         help='Size of training batches')
 
     parser.add_argument('--rate', dest='rate', type=int,
