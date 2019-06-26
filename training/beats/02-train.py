@@ -5,7 +5,6 @@ import argparse
 import os
 import sys
 from glob import glob
-import six
 import pickle
 
 import pandas as pd
@@ -14,8 +13,10 @@ import keras as K
 from sklearn.model_selection import ShuffleSplit
 
 import pescador
+import pumpp
 import librosa
 import crema.utils
+import crema.layers
 from jams.util import smkdirs
 
 OUTPUT_PATH = 'resources'
@@ -25,15 +26,15 @@ def process_arguments(args):
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument('--max_samples', dest='max_samples', type=int,
-                        default=512,
+                        default=128,
                         help='Maximum number of samples to draw per streamer')
 
     parser.add_argument('--patch-duration', dest='duration', type=float,
-                        default=8.0,
+                        default=16.0,
                         help='Duration (in seconds) of training patches')
 
     parser.add_argument('--seed', dest='seed', type=int,
-                        default='20170412',
+                        default='20190625',
                         help='Seed for the random number generator')
 
     parser.add_argument('--train-streamers', dest='train_streamers', type=int,
@@ -45,23 +46,19 @@ def process_arguments(args):
                         help='Size of training batches')
 
     parser.add_argument('--rate', dest='rate', type=int,
-                        default=64,
+                        default=8,
                         help='Rate of pescador stream deactivation')
 
     parser.add_argument('--epochs', dest='epochs', type=int,
-                        default=100,
+                        default=1000,
                         help='Maximum number of epochs to train for')
 
     parser.add_argument('--epoch-size', dest='epoch_size', type=int,
-                        default=512,
+                        default=2048,
                         help='Number of batches per epoch')
 
-    parser.add_argument('--validation-size', dest='validation_size', type=int,
-                        default=1024,
-                        help='Number of batches per validation')
-
     parser.add_argument('--early-stopping', dest='early_stopping', type=int,
-                        default=20,
+                        default=100,
                         help='# epochs without improvement to stop')
 
     parser.add_argument('--reduce-lr', dest='reduce_lr', type=int,
@@ -83,21 +80,32 @@ def make_sampler(max_samples, duration, pump, seed):
     return pump.sampler(max_samples, n_frames, random_state=seed)
 
 
+def val_sampler(max_duration, pump, seed):
+    '''validation sampler'''
+    n_frames = librosa.time_to_frames(max_duration,
+                                      sr=pump['mel'].sr,
+                                      hop_length=pump['mel'].hop_length)[0]
+
+    return pumpp.sampler.VariableLengthSampler(None, 32, n_frames,
+                                               *pump.ops,
+                                               random_state=seed)
+
+
+
 def data_sampler(fname, sampler):
     '''Generate samples from a specified h5 file'''
     for datum in sampler(crema.utils.load_h5(fname)):
         yield datum
 
 
-def data_generator(working, tracks, sampler, k, augment=True, batch_size=32,
-                   **kwargs):
+def data_generator(working, tracks, sampler, k, augment=True, rate=8, **kwargs):
     '''Generate a data stream from a collection of tracks and a sampler'''
 
     seeds = []
 
     for track in tracks:
         fname = os.path.join(working,
-                             os.path.extsep.join([str(track), 'h5']))
+                             os.path.extsep.join([track, 'h5']))
         seeds.append(pescador.Streamer(data_sampler, fname, sampler))
 
         if augment:
@@ -106,34 +114,24 @@ def data_generator(working, tracks, sampler, k, augment=True, batch_size=32,
                 seeds.append(pescador.Streamer(data_sampler, fname, sampler))
 
     # Send it all to a mux
-    mux = pescador.Mux(seeds, k, **kwargs)
-
-    if batch_size == 1:
-        return mux
-    else:
-        return pescador.BufferedStreamer(mux, batch_size)
+    return pescador.StochasticMux(seeds, k, rate, **kwargs)
 
 
-def keras_tuples(gen, inputs=None, outputs=None):
+def val_generator(working, tracks, sampler, augment=True):
+    '''validation generator, deterministic roundrobin'''
+    seeds = []
+    for track in tracks:
+        fname = os.path.join(working,
+                             os.path.extsep.join([track, 'h5']))
+        seeds.append(pescador.Streamer(data_sampler, fname, sampler))
 
-    if isinstance(inputs, six.string_types):
-        if isinstance(outputs, six.string_types):
-            # One input, one output
-            for datum in gen:
-                yield (datum[inputs], datum[outputs])
-        else:
-            # One input, multi outputs
-            for datum in gen:
-                yield (datum[inputs], [datum[o] for o in outputs])
-    else:
-        if isinstance(outputs, six.string_types):
-            for datum in gen:
-                yield ([datum[i] for i in inputs], datum[outputs])
-        else:
-            # One input, multi outputs
-            for datum in gen:
-                yield ([datum[i] for i in inputs],
-                       [datum[o] for o in outputs])
+        if augment:
+            for fname in sorted(glob(os.path.join(working,
+                                                  '{}.*.h5'.format(track)))):
+                seeds.append(pescador.Streamer(data_sampler, fname, sampler))
+
+    # Send it all to a mux
+    return pescador.RoundRobinMux(seeds)
 
 
 def construct_model(pump):
@@ -149,53 +147,38 @@ def construct_model(pump):
     x_bn = K.layers.BatchNormalization()(x_mag)
 
     # First convolutional filter: a single 7x7
-    conv1 = K.layers.Convolution2D(8, (7, 7),
+    conv1 = K.layers.Convolution2D(32, (7, 7),
                                    padding='same',
                                    activation='relu',
                                    data_format='channels_last')(x_bn)
 
     # Second convolutional filter: a bank of full-height filters
-    conv2 = K.layers.Convolution2D(16, (1, int(conv1.shape[2])),
+    conv2 = K.layers.Convolution2D(64, (1, int(conv1.shape[2])),
                                    padding='valid', activation='relu',
                                    data_format='channels_last')(conv1)
 
-    # Squeeze out the frequency dimension
-    def _squeeze(x, axis=-1):
-        import keras
-        return keras.backend.squeeze(x, axis=axis)
-
-    squeeze_c = K.layers.Lambda(_squeeze)(x_bn)
-    squeeze = K.layers.Lambda(_squeeze, arguments=dict(axis=2))(conv2)
+    squeeze_c = crema.layers.SqueezeLayer(axis=-1)(x_bin)
+    squeeze = crema.layers.SqueezeLayer(axis=2)(conv2)
 
     rnn_in = K.layers.concatenate([squeeze, squeeze_c])
     # BRNN layer
-    rnn1 = K.layers.Bidirectional(K.layers.GRU(64,
+    rnn1 = K.layers.Bidirectional(K.layers.GRU(128,
                                                return_sequences=True))(rnn_in)
+    r1bn = K.layers.BatchNormalization()(rnn1)
+    rnn2 = K.layers.Bidirectional(K.layers.GRU(128,
+                                               return_sequences=True))(r1bn)
 
-#    rnn2 = K.layers.Bidirectional(K.layers.GRU(16,
-#                                               return_sequences=True))(rnn1)
+    r2bn = K.layers.BatchNormalization()(rnn2)
 
-#    rnn3 = K.layers.Bidirectional(K.layers.GRU(16,
-#                                               return_sequences=True))(rnn2)
+    # Skip connections to the convolutional layers
+    codec = K.layers.concatenate([r2bn, r1bn, squeeze])
+    codecbn = K.layers.BatchNormalization()(codec)
 
-    # Skip connection to the convolutional onset detector layer
-    codec = K.layers.concatenate([rnn1, squeeze])
+    p0 = K.layers.Dense(1, activation='sigmoid')
+    p1 = K.layers.Dense(1, activation='sigmoid')
 
-#    p0 = K.layers.Dense(1, activation='sigmoid')
-#    p1 = K.layers.Dense(1, activation='sigmoid')
-
-#    beat = K.layers.TimeDistributed(p0, name='beat')(codec)
-#    downbeat = K.layers.TimeDistributed(p1, name='downbeat')(codec)
-
-    beat = K.layers.Convolution1D(1, 17,
-                                  padding='same',
-                                  activation='sigmoid',
-                                  name='beat')(codec)
-
-    downbeat = K.layers.Convolution1D(1, 17,
-                                      padding='same',
-                                      activation='sigmoid',
-                                      name='downbeat')(codec)
+    beat = K.layers.TimeDistributed(p0, name='beat')(codec)
+    downbeat = K.layers.TimeDistributed(p1, name='downbeat')(codec)
 
     model = K.models.Model([x_mag],
                            [beat, downbeat])
@@ -206,7 +189,7 @@ def construct_model(pump):
 
 
 def train(working, max_samples, duration, rate,
-          batch_size, epochs, epoch_size, validation_size,
+          batch_size, epochs, epoch_size, 
           early_stopping, reduce_lr, seed):
     '''
     Parameters
@@ -232,9 +215,6 @@ def train(working, max_samples, duration, rate,
     epoch_size : int
         Number of batches per epoch
 
-    validation_size : int
-        Number of validation batches
-
     early_stopping : int
         Number of epochs before early stopping
 
@@ -251,6 +231,8 @@ def train(working, max_samples, duration, rate,
 
     # Build the sampler
     sampler = make_sampler(max_samples, duration, pump, seed)
+
+    sampler_val = val_sampler(10 * 60, pump, seed)
 
     # Build the model
     model, inputs, outputs = construct_model(pump)
@@ -269,21 +251,22 @@ def train(working, max_samples, duration, rate,
     gen_train = data_generator(working,
                                idx_train['id'].values, sampler, epoch_size,
                                augment=True,
-                               lam=rate,
-                               batch_size=batch_size,
-                               revive=True,
+                               rate=rate,
+                               mode='with_replacement',
                                random_state=seed)
 
-    gen_train = keras_tuples(gen_train(), inputs=inputs, outputs=outputs)
+    gen_train = pescador.maps.keras_tuples(pescador.maps.buffer_stream(gen_train(), 
+                                                                       batch_size,
+                                                                       axis=0),
+                                           inputs=inputs,
+                                           outputs=outputs)
 
-    gen_val = data_generator(working,
-                             idx_val['id'].values, sampler, len(idx_val),
-                             augment=False,
-                             batch_size=batch_size,
-                             revive=True,
-                             random_state=seed)
+    gen_val = val_generator(working, idx_val['id'].values, sampler_val,
+                            augment=True)
 
-    gen_val = keras_tuples(gen_val(), inputs=inputs, outputs=outputs)
+    validation_size = gen_val.n_streams
+
+    gen_val = pescador.maps.keras_tuples(gen_val(), inputs=inputs, outputs=outputs)
 
     loss = {'beat': 'binary_crossentropy',
             'downbeat': 'binary_crossentropy'}
@@ -292,7 +275,8 @@ def train(working, max_samples, duration, rate,
 
     monitor = 'val_loss'
 
-    model.compile(K.optimizers.Adam(), loss=loss, metrics=metrics)
+    sgd = K.optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(sgd, loss=loss, metrics=metrics)
 
     # Store the model
     model_spec = K.utils.serialize_keras_object(model)
@@ -341,7 +325,6 @@ if __name__ == '__main__':
           params.rate,
           params.batch_size,
           params.epochs, params.epoch_size,
-          params.validation_size,
           params.early_stopping,
           params.reduce_lr,
           params.seed)

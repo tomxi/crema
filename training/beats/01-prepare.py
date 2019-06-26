@@ -33,7 +33,7 @@ def process_arguments(args):
                         help='Number of FFT bins')
 
     parser.add_argument('--nmels', dest='n_mels', type=int,
-                        default=256,
+                        default=64,
                         help='Number of Mel bins')
 
     parser.add_argument('--jobs', dest='n_jobs', type=int,

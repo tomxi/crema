@@ -20,10 +20,10 @@ OUTPUT_PATH = 'resources'
 def process_arguments(args):
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument('--stretch', dest='stretch', type=float, default=0.333,
+    parser.add_argument('--stretch', dest='stretch', type=float, default=0.5,
                         help='Relative time stretch range')
 
-    parser.add_argument('--n-stretch', dest='n_stretch', type=int, default=4,
+    parser.add_argument('--n-stretch', dest='n_stretch', type=int, default=3,
                         help='Number of stretched examples')
 
     parser.add_argument('--audio-ext', dest='audio_ext', type=str,
