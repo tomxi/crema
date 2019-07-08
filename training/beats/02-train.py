@@ -42,7 +42,7 @@ def process_arguments(args):
                         help='Number of active training streamers')
 
     parser.add_argument('--batch-size', dest='batch_size', type=int,
-                        default=16,
+                        default=8,
                         help='Size of training batches')
 
     parser.add_argument('--rate', dest='rate', type=int,
@@ -146,15 +146,15 @@ def construct_model(pump):
     # Apply batch normalization
     x_bn = K.layers.BatchNormalization()(x_mag)
 
-    # First convolutional filter: a single 5x5
-    conv1 = K.layers.Convolution2D(16, (5, 5),
+    # First convolutional filter: 5x5
+    conv1 = K.layers.Convolution2D(8, (5, 5),
                                    padding='same',
                                    activation='relu',
                                    data_format='channels_last')(x_bn)
     c1bn = K.layers.BatchNormalization()(conv1)
 
     # Second convolutional filter: a bank of full-height filters
-    conv2 = K.layers.Convolution2D(32, (1, int(conv1.shape[2])),
+    conv2 = K.layers.Convolution2D(16, (1, int(conv1.shape[2])),
                                    padding='valid', activation='relu',
                                    data_format='channels_last')(c1bn)
     c2bn = K.layers.BatchNormalization()(conv2)
