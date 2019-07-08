@@ -96,6 +96,7 @@ def _load_models():
 
     if not __MODELS__:
         __MODELS__.append(models.chord.ChordModel())
+        __MODELS__.append(models.beat.BeatModel())
 
 
 if __name__ == '__main__':  # pragma: no cover

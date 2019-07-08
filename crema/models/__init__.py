@@ -2,4 +2,5 @@
 '''CREMA models'''
 
 from . import base
+from . import beat
 from . import chord

@@ -30,7 +30,7 @@ def process_arguments(args):
                         help='Maximum number of samples to draw per streamer')
 
     parser.add_argument('--patch-duration', dest='duration', type=float,
-                        default=8.0,
+                        default=12.0,
                         help='Duration (in seconds) of training patches')
 
     parser.add_argument('--seed', dest='seed', type=int,
@@ -146,26 +146,29 @@ def construct_model(pump):
     # Apply batch normalization
     x_bn = K.layers.BatchNormalization()(x_mag)
 
-    # First convolutional filter: a single 7x7
-    conv1 = K.layers.Convolution2D(32, (7, 7),
+    # First convolutional filter: a single 5x5
+    conv1 = K.layers.Convolution2D(16, (5, 5),
                                    padding='same',
                                    activation='relu',
                                    data_format='channels_last')(x_bn)
+    c1bn = K.layers.BatchNormalization()(conv1)
 
     # Second convolutional filter: a bank of full-height filters
-    conv2 = K.layers.Convolution2D(64, (1, int(conv1.shape[2])),
+    conv2 = K.layers.Convolution2D(32, (1, int(conv1.shape[2])),
                                    padding='valid', activation='relu',
-                                   data_format='channels_last')(conv1)
+                                   data_format='channels_last')(c1bn)
+    c2bn = K.layers.BatchNormalization()(conv2)
 
     squeeze_c = crema.layers.SqueezeLayer(axis=-1)(x_bn)
-    squeeze = crema.layers.SqueezeLayer(axis=2)(conv2)
+    squeeze = crema.layers.SqueezeLayer(axis=2)(c2bn)
 
     rnn_in = K.layers.concatenate([squeeze, squeeze_c])
+
     # BRNN layer
-    rnn1 = K.layers.Bidirectional(K.layers.GRU(128,
+    rnn1 = K.layers.Bidirectional(K.layers.LSTM(32,
                                                return_sequences=True))(rnn_in)
     r1bn = K.layers.BatchNormalization()(rnn1)
-    rnn2 = K.layers.Bidirectional(K.layers.GRU(128,
+    rnn2 = K.layers.Bidirectional(K.layers.LSTM(64,
                                                return_sequences=True))(r1bn)
 
     r2bn = K.layers.BatchNormalization()(rnn2)
