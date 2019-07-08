@@ -30,7 +30,7 @@ def process_arguments(args):
                         help='Maximum number of samples to draw per streamer')
 
     parser.add_argument('--patch-duration', dest='duration', type=float,
-                        default=12.0,
+                        default=8.0,
                         help='Duration (in seconds) of training patches')
 
     parser.add_argument('--seed', dest='seed', type=int,
@@ -177,8 +177,8 @@ def construct_model(pump):
     codec = K.layers.concatenate([r2bn, r1bn, squeeze])
     codecbn = K.layers.BatchNormalization()(codec)
 
-    p0 = K.layers.Dense(1, activation='sigmoid')
-    p1 = K.layers.Dense(1, activation='sigmoid')
+    p0 = K.layers.Dense(1, activation='sigmoid', use_bias=False)
+    p1 = K.layers.Dense(1, activation='sigmoid', use_bias=False)
 
     beat = K.layers.TimeDistributed(p0, name='beat')(codec)
     downbeat = K.layers.TimeDistributed(p1, name='downbeat')(codec)
