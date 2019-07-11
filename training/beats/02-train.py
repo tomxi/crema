@@ -91,7 +91,6 @@ def val_sampler(max_duration, pump, seed):
                                                random_state=seed)
 
 
-
 def data_sampler(fname, sampler):
     '''Generate samples from a specified h5 file'''
     for datum in sampler(crema.utils.load_h5(fname)):
@@ -153,22 +152,42 @@ def construct_model(pump):
                                    data_format='channels_last')(x_bn)
     c1bn = K.layers.BatchNormalization()(conv1)
 
-    # Second convolutional filter: a bank of full-height filters
-    conv2 = K.layers.Convolution2D(16, (1, int(conv1.shape[2])),
-                                   padding='valid', activation='relu',
+    conv2 = K.layers.Convolution2D(8, (5, 5),
+                                   padding='same', activation='relu',
                                    data_format='channels_last')(c1bn)
     c2bn = K.layers.BatchNormalization()(conv2)
 
+    conv3 = K.layers.Convolution2D(16, (5, 5),
+                                   padding='same', activation='relu',
+                                   data_format='channels_last')(c2bn)
+    c3bn = K.layers.BatchNormalization()(conv3)
+
+    conv4 = K.layers.Convolution2D(16, (5, 5),
+                                   padding='same', activation='relu',
+                                   data_format='channels_last')(c3bn)
+    c4bn = K.layers.BatchNormalization()(conv4)
+
+    conv5 = K.layers.Convolution2D(32, (5, 5),
+                                   padding='same', activation='relu',
+                                   data_format='channels_last')(c4bn)
+    c5bn = K.layers.BatchNormalization()(conv5)
+
+    convn = K.layers.Convolution2D(32, (1, int(c5bn.shape[2])),
+                                   padding='valid', activation='relu',
+                                   data_format='channels_last')(c5bn)
+    cnbn = K.layers.BatchNormalization()(convn)
+
+    # Third convolutional
     squeeze_c = crema.layers.SqueezeLayer(axis=-1)(x_bn)
-    squeeze = crema.layers.SqueezeLayer(axis=2)(c2bn)
+    squeeze = crema.layers.SqueezeLayer(axis=2)(cnbn)
 
     rnn_in = K.layers.concatenate([squeeze, squeeze_c])
 
     # BRNN layer
-    rnn1 = K.layers.Bidirectional(K.layers.LSTM(32,
+    rnn1 = K.layers.Bidirectional(K.layers.GRU(8,
                                                return_sequences=True))(rnn_in)
     r1bn = K.layers.BatchNormalization()(rnn1)
-    rnn2 = K.layers.Bidirectional(K.layers.LSTM(64,
+    rnn2 = K.layers.Bidirectional(K.layers.GRU(16,
                                                return_sequences=True))(r1bn)
 
     r2bn = K.layers.BatchNormalization()(rnn2)
@@ -180,8 +199,8 @@ def construct_model(pump):
     p0 = K.layers.Dense(1, activation='sigmoid', use_bias=False)
     p1 = K.layers.Dense(1, activation='sigmoid', use_bias=False)
 
-    beat = K.layers.TimeDistributed(p0, name='beat')(codec)
-    downbeat = K.layers.TimeDistributed(p1, name='downbeat')(codec)
+    beat = K.layers.TimeDistributed(p0, name='beat')(codecbn)
+    downbeat = K.layers.TimeDistributed(p1, name='downbeat')(codecbn)
 
     model = K.models.Model([x_mag],
                            [beat, downbeat])
@@ -192,7 +211,7 @@ def construct_model(pump):
 
 
 def train(working, max_samples, duration, rate,
-          batch_size, epochs, epoch_size, 
+          batch_size, epochs, epoch_size,
           early_stopping, reduce_lr, seed):
     '''
     Parameters
