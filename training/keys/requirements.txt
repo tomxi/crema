@@ -1,0 +1,4 @@
+pescador>=2.0.1
+muda>=0.1.3
+tqdm
+mirdata
