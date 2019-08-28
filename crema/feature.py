@@ -10,14 +10,12 @@ class StructuredChord(pumpp.FeatureExtractor):
     '''Extract Crema style sturcture-chord output as features
     '''
 
-    def __init__(self, name):
+    def __init__(self, name, conv=None, dtype='float32'):
 
         self.chord_model = get_model('chord')
 
-        sr = self.chord_model.pump['cqt'].sr
-        hop_length = self.chord_model.pump['cqt'].hop_length
-        conv = self.chord_model.pump['cqt'].conv
-        dtype = self.chord_model.pump['cqt'].dtype
+        sr = self.chord_model.pump['chord_struct'].sr
+        hop_length = self.chord_model.pump['chord_struct'].hop_length
 
         super(StructuredChord, self).__init__(name, sr, hop_length,
                                               conv=conv, dtype=dtype)
