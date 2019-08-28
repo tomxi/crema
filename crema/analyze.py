@@ -9,9 +9,9 @@ import jams
 
 from . import models
 
-__MODELS__ = []
+__MODELS__ = {}
 
-__all__ = ['analyze', 'main']
+__all__ = ['analyze', 'get_model', 'main']
 
 
 def analyze(filename=None, y=None, sr=None):
@@ -61,11 +61,35 @@ def analyze(filename=None, y=None, sr=None):
     jam.file_metadata.duration = librosa.get_duration(y=y, sr=sr,
                                                       filename=filename)
 
-    for model in __MODELS__:
+    for namespace, model in __MODELS__.items():
         jam.annotations.append(model.predict(filename=filename, y=y, sr=sr))
 
     return jam
 
+
+def get_model(namespace):
+    '''Get a specific model.
+
+    Parameters
+    ----------
+    namespace : str
+        one of ['chord', 'beat', 'key']
+
+    Returns
+    -------
+    model : crema.models.<task>.<Task>Model or None
+        access the __MODELS__ dictionary. If namespace is not in __MODELS__
+        return None
+
+    '''
+
+    _load_models()
+
+    try:
+        return __MODELS__[namespace]
+    except KeyError:
+        print('No model for the "{}" task is loaded!'.format(namespace))
+        return None
 
 def parse_args(args):  # pragma: no cover
 
@@ -95,7 +119,7 @@ def _load_models():
     global __MODELS__
 
     if not __MODELS__:
-        __MODELS__.append(models.chord.ChordModel())
+        __MODELS__['chord'] = models.chord.ChordModel()
 
 
 if __name__ == '__main__':  # pragma: no cover

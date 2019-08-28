@@ -91,3 +91,6 @@ ENV/
 
 # Sublime project settings
 *.sublime-*
+
+# Tom's tests
+testbed.ipynb
