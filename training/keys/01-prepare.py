@@ -14,6 +14,7 @@ from jams.util import smkdirs
 import pumpp
 
 import crema.utils
+from train_utils import make_pump, get_ann_audio_guitarset
 
 OUTPUT_PATH = 'resources'
 
@@ -37,30 +38,6 @@ def process_arguments(args):
     return parser.parse_args(args)
 
 
-def make_pump():
-    p_feature = crema.feature.StructuredChord(name='chord_struct',
-                                              conv='tf')
-    
-    p_key_tag = pumpp.task.KeyTagTransformer(name='key_tag',
-                                             sr=p_feature.sr,
-                                             hop_length=p_feature.hop_length,
-                                             sparse=True)
-    
-    p_key_struct = pumpp.task.KeyTransformer(name='key_struct',
-                                             sr=p_feature.sr,
-                                             hop_length=p_feature.hop_length,
-                                             sparse=True)
-    
-    pump = pumpp.Pump(p_feature, p_key_tag, p_key_struct)
-    
-    # TODO save the pump
-    with open(os.path.join(OUTPUT_PATH, 'pump.pkl'), 'wb') as fd:
-        pickle.dump(pump, fd)
-    
-    return pump
-
-
-
 def convert(aud, jam, pump, outdir):
     data = pump.transform(aud, jam)
     fname = os.path.extsep.join([os.path.join(outdir, crema.utils.base(aud)),
@@ -78,17 +55,17 @@ if __name__ == '__main__':
     pump = make_pump()
     n_jobs = 1 # can't parallelize due to custom keras layers
 
-    stream = tqdm(crema.utils.get_ann_audio_json(params.data_home, params.index_json),
+    stream = tqdm(get_ann_audio_guitarset(params.data_home, params.index_json),
                   desc='Converting training data')
     Parallel(n_jobs=n_jobs)(delayed(convert)(aud, ann,
                                              pump,
                                              params.output_path)
-                                   for aud, ann in stream)
+                            for aud, ann in stream)
 
     if params.augment_path:
-        stream = tqdm(crema.utils.get_ann_audio_json(params.data_home, params.index_json),
+        stream = tqdm(get_ann_audio_guitarset(params.data_home, params.index_json),
                       desc='Converting augmented data')
         Parallel(n_jobs=n_jobs)(delayed(convert)(aud, ann,
                                                  pump,
                                                  params.output_path)
-                                       for aud, ann in stream)
+                                for aud, ann in stream)

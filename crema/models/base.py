@@ -89,13 +89,16 @@ class CremaModel(object):
         '''Feature transformation'''
         raise NotImplementedError
 
-    def _instantiate(self, rsc):
+    def _instantiate(self, rsc, make_pump_lambda=None):
 
         # First, load the pump
-        with open(resource_filename(__name__,
-                                    os.path.join(rsc, 'pump.pkl')),
-                  'rb') as fd:
-            self.pump = pickle.load(fd)
+        if make_pump_lambda:
+            self.pump = make_pump_lambda()
+        else:
+            with open(resource_filename(__name__,
+                                        os.path.join(rsc, 'pump.pkl')),
+                      'rb') as fd:
+                self.pump = pickle.load(fd)
 
         # Now load the model
         with open(resource_filename(__name__,

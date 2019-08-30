@@ -5,7 +5,6 @@ import os
 import subprocess
 import h5py
 from librosa.util import find_files
-import pandas as pd
 
 from .exceptions import DataError
 
@@ -169,37 +168,5 @@ def get_ann_audio(directory):
 
     if len(audio) != len(annos) or any([base(aud) != base(ann) for aud, ann in paired]):
         raise DataError('Unmatched audio/annotation data in {}'.format(directory))
-
-    return paired
-
-
-def get_ann_audio_json(data_home, index_json):
-    '''Get a list of annotations and audio files from a index_json.
-
-    Parameters
-    ----------
-    index_json : str
-        The json file to pull data
-    Returns
-    -------
-    pairs : list of tuples (audio_file, annotation_file)
-    '''
-    
-    audio_paths = []
-    anno_paths = []
-    
-    index_df = pd.read_json(index_json)
-    for track_id in index_df:
-        audio_rel_path, audio_md5 = index_df[track_id].audio_mic
-        jams_rel_path, jams_md5 = index_df[track_id].jams
-        
-        aud_path = os.path.join(data_home, audio_rel_path)
-        jams_path = os.path.join(data_home, jams_rel_path)
-        assert os.path.isfile(aud_path) and os.path.isfile(jams_path)
-        
-        audio_paths.append(aud_path)
-        anno_paths.append(jams_path)
-
-    paired = list(zip(audio_paths, anno_paths))
 
     return paired
