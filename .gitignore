@@ -93,4 +93,3 @@ ENV/
 *.sublime-*
 
 # Tom's tests
-testbed.ipynb
