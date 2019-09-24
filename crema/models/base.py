@@ -89,7 +89,7 @@ class CremaModel(object):
         '''Feature transformation'''
         raise NotImplementedError
 
-    def _instantiate(self, rsc, make_pump_lambda=None):
+    def _instantiate(self, rsc, make_pump_lambda=None, model_weights='model.h5'):
 
         # First, load the pump
         if make_pump_lambda:
@@ -112,7 +112,7 @@ class CremaModel(object):
         # And the model weights
         self.model.load_weights(resource_filename(__name__,
                                                   os.path.join(rsc,
-                                                               'model.h5')))
+                                                               model_weights)))
 
         # And the version number
         with open(resource_filename(__name__,

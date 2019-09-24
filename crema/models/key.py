@@ -11,8 +11,8 @@ from ..feature import StructuredChord
 
 class KeyModel(CremaModel):
 
-    def __init__(self):
-        self._instantiate('key', make_pump_lambda=self.make_pump_)
+    def __init__(self, model_weights='model.h5'):
+        self._instantiate('key', make_pump_lambda=self.make_pump_, model_weights=model_weights)
 
     def predict(self, filename=None, y=None, sr=None, outputs=None):
         '''Key prediction
